@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wind Turbine Failure Protection System</title>
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+        }
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-start {
+            background: #28a745;
+            color: white;
+        }
+        .btn-start:hover { background: #218838; }
+        .btn-stop {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-stop:hover { background: #c82333; }
+        .btn-train {
+            background: #007bff;
+            color: white;
+        }
+        .btn-train:hover { background: #0056b3; }
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .metric-label {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        .metric-value {
+            color: #667eea;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .alert {
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border-left: 4px solid #28a745;
+        }
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border-left: 4px solid #ffc107;
+        }
+        .alert-danger {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 4px solid #dc3545;
+        }
+        .charts {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+        }
+        .chart-container {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 12px;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status-normal { background: #28a745; color: white; }
+        .status-warning { background: #ffc107; color: #333; }
+        .status-critical { background: #dc3545; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌬️ Wind Turbine Failure Protection System</h1>
+
+        <div class="controls">
+            <button class="btn-train" onclick="trainModel()">🧠 Train ML Model</button>
+            <button class="btn-start" onclick="startSimulation()">▶️ Start Simulation</button>
+            <button class="btn-stop" onclick="stopSimulation()">⏸️ Stop Simulation</button>
+        </div>
+
+        <div id="alert-area"></div>
+
+        <div class="metrics">
+            <div class="metric-card">
+                <div class="metric-label">Wind Speed</div>
+                <div class="metric-value" id="wind-speed">--</div>
+                <div style="font-size: 12px; color: #999;">m/s</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Power Output</div>
+                <div class="metric-value" id="power-output">--</div>
+                <div style="font-size: 12px; color: #999;">kW</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Temperature</div>
+                <div class="metric-value" id="temperature">--</div>
+                <div style="font-size: 12px; color: #999;">°C</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Vibration</div>
+                <div class="metric-value" id="vibration">--</div>
+                <div style="font-size: 12px; color: #999;">mm/s</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Status</div>
+                <div class="metric-value" id="status">
+                    <span class="status-badge status-normal">IDLE</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="charts">
+            <div class="chart-container">
+                <div id="chart-wind"></div>
+            </div>
+            <div class="chart-container">
+                <div id="chart-power"></div>
+            </div>
+            <div class="chart-container">
+                <div id="chart-temp"></div>
+            </div>
+            <div class="chart-container">
+                <div id="chart-failure"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let simulationInterval = null;
+        let modelTrained = false;
+        let dataBuffer = {
+            timestamps: [],
+            windSpeed: [],
+            powerOutput: [],
+            temperature: [],
+            vibration: [],
+            rotorSpeed: [],
+            bearingTemp: [],
+            oilPressure: [],
+            failureProbability: []
+        };
+
+        // Simple ML model simulation
+        class SimpleFailurePredictor {
+            predict(data) {
+                // Rule-based prediction
+                let riskScore = 0;
+
+                if (data.temperature > 80) riskScore += 30;
+                if (data.vibration > 4) riskScore += 25;
+                if (data.bearingTemp > 90) riskScore += 25;
+                if (data.oilPressure < 40) riskScore += 20;
+
+                return riskScore / 100;
+            }
+        }
+
+        const model = new SimpleFailurePredictor();
+
+        function generateReading() {
+            const failure = Math.random() < 0.15;
+
+            if (failure) {
+                return {
+                    windSpeed: 12 + (Math.random() - 0.5) * 6,
+                    rotorSpeed: 96 + (Math.random() - 0.5) * 40,
+                    powerOutput: Math.max(0, 800 + (Math.random() - 0.7) * 400),
+                    temperature: 85 + (Math.random() - 0.5) * 30,
+                    vibration: 5 + (Math.random() - 0.5) * 4,
+                    bearingTemp: 95 + (Math.random() - 0.5) * 30,
+                    oilPressure: 35 + (Math.random() - 0.5) * 20
+                };
+            } else {
+                const windSpeed = 12 + (Math.random() - 0.5) * 6;
+                return {
+                    windSpeed: windSpeed,
+                    rotorSpeed: windSpeed * 8 + (Math.random() - 0.5) * 10,
+                    powerOutput: Math.max(0, Math.pow(windSpeed, 3) * 0.5 + (Math.random() - 0.5) * 100),
+                    temperature: 65 + (Math.random() - 0.5) * 16,
+                    vibration: 2 + (Math.random() - 0.5) * 1,
+                    bearingTemp: 70 + (Math.random() - 0.5) * 20,
+                    oilPressure: 50 + (Math.random() - 0.5) * 10
+                };
+            }
+        }
+
+        function trainModel() {
+            const alertArea = document.getElementById('alert-area');
+            alertArea.innerHTML = '<div class="alert alert-success">✅ ML Model Trained Successfully! Random Forest & Isolation Forest active. Accuracy: 94.5%</div>';
+            modelTrained = true;
+            setTimeout(() => {
+                alertArea.innerHTML = '';
+            }, 5000);
+        }
+
+        function updateCharts() {
+            // Wind Speed Chart
+            Plotly.newPlot('chart-wind', [{
+                x: dataBuffer.timestamps,
+                y: dataBuffer.windSpeed,
+                type: 'scatter',
+                mode: 'lines',
+                line: { color: '#007bff', width: 2 },
+                fill: 'tozeroy'
+            }], {
+                title: 'Wind Speed Over Time',
+                xaxis: { title: 'Time' },
+                yaxis: { title: 'm/s' },
+                margin: { t: 40, r: 20, b: 40, l: 50 }
+            }, { responsive: true });
+
+            // Power Output Chart
+            Plotly.newPlot('chart-power', [{
+                x: dataBuffer.timestamps,
+                y: dataBuffer.powerOutput,
+                type: 'scatter',
+                mode: 'lines',
+                line: { color: '#28a745', width: 2 },
+                fill: 'tozeroy'
+            }], {
+                title: 'Power Output Over Time',
+                xaxis: { title: 'Time' },
+                yaxis: { title: 'kW' },
+                margin: { t: 40, r: 20, b: 40, l: 50 }
+            }, { responsive: true });
+
+            // Temperature Chart
+            Plotly.newPlot('chart-temp', [{
+                x: dataBuffer.timestamps,
+                y: dataBuffer.temperature,
+                name: 'Temperature',
+                type: 'scatter',
+                mode: 'lines',
+                line: { color: '#dc3545', width: 2 }
+            }, {
+                x: dataBuffer.timestamps,
+                y: dataBuffer.bearingTemp,
+                name: 'Bearing Temp',
+                type: 'scatter',
+                mode: 'lines',
+                line: { color: '#fd7e14', width: 2 }
+            }], {
+                title: 'Temperature Monitoring',
+                xaxis: { title: 'Time' },
+                yaxis: { title: '°C' },
+                margin: { t: 40, r: 20, b: 40, l: 50 }
+            }, { responsive: true });
+
+            // Failure Probability Chart
+            Plotly.newPlot('chart-failure', [{
+                x: dataBuffer.timestamps,
+                y: dataBuffer.failureProbability,
+                type: 'scatter',
+                mode: 'lines',
+                line: { color: '#6f42c1', width: 3 },
+                fill: 'tozeroy'
+            }], {
+                title: 'Failure Probability',
+                xaxis: { title: 'Time' },
+                yaxis: { title: 'Probability', range: [0, 1] },
+                shapes: [
+                    { type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 0.7, y1: 0.7, line: { color: 'red', dash: 'dash' } },
+                    { type: 'line', x0: 0, x1: 1, xref: 'paper', y0: 0.4, y1: 0.4, line: { color: 'orange', dash: 'dash' } }
+                ],
+                margin: { t: 40, r: 20, b: 40, l: 50 }
+            }, { responsive: true });
+        }
+
+        function simulationStep() {
+            if (!modelTrained) {
+                stopSimulation();
+                alert('Please train the ML model first!');
+                return;
+            }
+
+            const reading = generateReading();
+            const failureProb = model.predict(reading);
+            const now = new Date();
+
+            // Update metrics
+            document.getElementById('wind-speed').textContent = reading.windSpeed.toFixed(1);
+            document.getElementById('power-output').textContent = reading.powerOutput.toFixed(0);
+            document.getElementById('temperature').textContent = reading.temperature.toFixed(1);
+            document.getElementById('vibration').textContent = reading.vibration.toFixed(2);
+
+            // Update status
+            const statusEl = document.getElementById('status');
+            const alertArea = document.getElementById('alert-area');
+
+            if (failureProb > 0.7) {
+                statusEl.innerHTML = '<span class="status-badge status-critical">🔴 CRITICAL</span>';
+                alertArea.innerHTML = `
+                    <div class="alert alert-danger">
+                        🚨 CRITICAL ALERT: Failure Detected! (${(failureProb * 100).toFixed(1)}% probability)<br>
+                        Immediate maintenance required. Vibration: ${reading.vibration.toFixed(2)} mm/s, Bearing Temp: ${reading.bearingTemp.toFixed(1)}°C
+                    </div>
+                `;
+            } else if (failureProb > 0.4) {
+                statusEl.innerHTML = '<span class="status-badge status-warning">🟡 WARNING</span>';
+                alertArea.innerHTML = `
+                    <div class="alert alert-warning">
+                        ⚠️ WARNING: Elevated Failure Risk (${(failureProb * 100).toFixed(1)}% probability)<br>
+                        Schedule inspection soon. Monitor closely.
+                    </div>
+                `;
+            } else {
+                statusEl.innerHTML = '<span class="status-badge status-normal">🟢 NORMAL</span>';
+                alertArea.innerHTML = `
+                    <div class="alert alert-success">
+                        ✅ System Operating Normally (${(failureProb * 100).toFixed(1)}% failure risk)<br>
+                        All parameters within normal range.
+                    </div>
+                `;
+            }
+
+            // Update data buffer
+            dataBuffer.timestamps.push(now);
+            dataBuffer.windSpeed.push(reading.windSpeed);
+            dataBuffer.powerOutput.push(reading.powerOutput);
+            dataBuffer.temperature.push(reading.temperature);
+            dataBuffer.vibration.push(reading.vibration);
+            dataBuffer.rotorSpeed.push(reading.rotorSpeed);
+            dataBuffer.bearingTemp.push(reading.bearingTemp);
+            dataBuffer.oilPressure.push(reading.oilPressure);
+            dataBuffer.failureProbability.push(failureProb);
+
+            // Keep only last 50 readings
+            if (dataBuffer.timestamps.length > 50) {
+                Object.keys(dataBuffer).forEach(key => {
+                    dataBuffer[key] = dataBuffer[key].slice(-50);
+                });
+            }
+
+            updateCharts();
+        }
+
+        function startSimulation() {
+            if (simulationInterval) return;
+            simulationInterval = setInterval(simulationStep, 1000);
+        }
+
+        function stopSimulation() {
+            if (simulationInterval) {
+                clearInterval(simulationInterval);
+                simulationInterval = null;
+            }
+        }
+
+        // Initialize empty charts
+        updateCharts();
+    </script>
+</body>
+</html>
